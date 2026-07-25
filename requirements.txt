@@ -1,0 +1,6 @@
+# Runtime: the app itself is stdlib-only. qrcode is optional -- without it the
+# startup banner just prints the URL instead of a scannable code.
+qrcode>=8.0
+
+# Build-time only: produces the standalone .exe.
+pyinstaller>=6.10

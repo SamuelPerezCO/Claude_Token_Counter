@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Claude Code usage</title>
+<style>
+  :root {
+    color-scheme: light;
+    --plane:          #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --border:         rgba(11, 11, 11, 0.10);
+    --accent:         #2a78d6;  /* sequential blue, step 450 */
+    --good:           #0ca30c;
+    --warning:        #fab219;
+    --critical:       #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --plane:          #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --border:         rgba(255, 255, 255, 0.10);
+      --accent:         #3987e5;  /* blue re-stepped for the dark surface */
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+    background: var(--plane);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; }
+
+  /* ---- header ------------------------------------------------------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-bottom: 20px;
+  }
+  h1 {
+    margin: 0; font-size: 1rem; font-weight: 600;
+    letter-spacing: -0.01em; color: var(--text-secondary);
+  }
+  /* Status carries an icon AND a word, so it never depends on colour alone. */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px 4px 8px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface-1);
+    font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .pill-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    display: grid; place-items: center; flex: none;
+    background: var(--text-muted); color: #fff;
+    font-size: 9px; font-weight: 700; line-height: 1;
+  }
+  .pill[data-state="good"]     .pill-dot { background: var(--good); }
+  .pill[data-state="warning"]  .pill-dot { background: var(--warning); color: #0b0b0b; }
+  .pill[data-state="critical"] .pill-dot { background: var(--critical); }
+
+  /* ---- hero figure -------------------------------------------------- */
+  .hero {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px 20px 20px; margin-bottom: 14px;
+  }
+  .hero-label {
+    font-size: 0.8125rem; color: var(--text-secondary);
+    margin-bottom: 2px;
+  }
+  .hero-value {
+    /* Proportional figures: tabular-nums makes a display-size number look loose. */
+    font-size: clamp(3rem, 17vw, 4.25rem);
+    font-weight: 600; letter-spacing: -0.03em; line-height: 1.05;
+    color: var(--text-primary);
+  }
+  .hero-sub {
+    font-size: 0.875rem; color: var(--text-muted);
+    font-variant-numeric: tabular-nums;  /* ticks every second - keep it steady */
+  }
+
+  /* ---- meters ------------------------------------------------------- */
+  .meters { display: grid; gap: 10px; }
+  .meter {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px 16px 15px;
+    /* The fill carries severity; the track is a lighter step of that same
+       ramp, mixed toward the surface, so state reads across the whole bar. */
+    --fill: var(--accent);
+    --track: color-mix(in oklab, var(--fill) 18%, var(--surface-1));
+  }
+  .meter[data-severity="warning"]  { --fill: var(--warning); }
+  .meter[data-severity="critical"] { --fill: var(--critical); }
+
+  .meter-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 10px; margin-bottom: 9px;
+  }
+  .meter-label { font-size: 0.875rem; color: var(--text-secondary); }
+  .meter-value {
+    font-size: 1.0625rem; font-weight: 600; color: var(--text-primary);
+  }
+  .meter-track {
+    height: 10px; background: var(--track);
+    border-radius: 0 4px 4px 0;   /* rounded data-end, square at the baseline */
+    overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%; width: 0%; background: var(--fill);
+    border-radius: 0 4px 4px 0;
+    transition: width .45s cubic-bezier(.4, 0, .2, 1), background-color .3s;
+  }
+  .meter-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-top: 8px;
+    font-size: 0.8125rem; color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .badge {
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.02em;
+    text-transform: uppercase; color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 6px; font-variant-numeric: normal;
+  }
+  [hidden] { display: none !important; }
+
+  /* ---- notice / footer ---------------------------------------------- */
+  .notice {
+    margin-bottom: 14px; padding: 12px 14px; border-radius: 12px;
+    background: var(--surface-1);
+    border: 1px solid var(--critical);
+    font-size: 0.8125rem; color: var(--text-secondary);
+  }
+  .notice strong { color: var(--text-primary); display: block; margin-bottom: 2px; }
+  footer {
+    margin-top: 18px; display: flex; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+    font-size: 0.75rem; color: var(--text-muted);
+  }
+  footer button {
+    font: inherit; color: var(--text-secondary); cursor: pointer;
+    background: none; border: 1px solid var(--border);
+    border-radius: 999px; padding: 3px 12px;
+  }
+  footer button:active { background: var(--track, var(--plane)); }
+  @media (prefers-reduced-motion: reduce) {
+    .meter-fill { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Claude Code usage</h1>
+    <span class="pill" id="pill" data-state="unknown">
+      <span class="pill-dot" id="pill-icon">-</span>
+      <span id="pill-text">Connecting</span>
+    </span>
+  </header>
+
+  <div class="notice" id="notice" hidden>
+    <strong id="notice-title">Something went wrong</strong>
+    <span id="notice-body"></span>
+  </div>
+
+  <section class="hero">
+    <div class="hero-label" id="hero-label">Session used</div>
+    <div class="hero-value" id="hero-value">--</div>
+    <div class="hero-sub" id="hero-sub">&nbsp;</div>
+  </section>
+
+  <section class="meters">
+    <article class="meter" id="m-session" data-severity="normal">
+      <div class="meter-head">
+        <span class="meter-label">Session &middot; 5 hours</span>
+        <span class="meter-value" id="v-session">--</span>
+      </div>
+      <div class="meter-track" role="progressbar" id="t-session"
+           aria-label="Session usage" aria-valuemin="0" aria-valuemax="100">
+        <div class="meter-fill" id="f-session"></div>
+      </div>
+      <div class="meter-foot">
+        <span id="r-session">&nbsp;</span>
+        <span class="badge" id="b-session" hidden>Binding limit</span>
+      </div>
+    </article>
+
+    <article class="meter" id="m-week" data-severity="normal">
+      <div class="meter-head">
+        <span class="meter-label">Weekly &middot; 7 days</span>
+        <span class="meter-value" id="v-week">--</span>
+      </div>
+      <div class="meter-track" role="progressbar" id="t-week"
+           aria-label="Weekly usage" aria-valuemin="0" aria-valuemax="100">
+        <div class="meter-fill" id="f-week"></div>
+      </div>
+      <div class="meter-foot">
+        <span id="r-week">&nbsp;</span>
+        <span class="badge" id="b-week" hidden>Binding limit</span>
+      </div>
+    </article>
+
+    <article class="meter" id="m-overage" data-severity="normal" hidden>
+      <div class="meter-head">
+        <span class="meter-label">Overage</span>
+        <span class="meter-value" id="v-overage">--</span>
+      </div>
+      <div class="meter-track" role="progressbar" id="t-overage"
+           aria-label="Overage usage" aria-valuemin="0" aria-valuemax="100">
+        <div class="meter-fill" id="f-overage"></div>
+      </div>
+      <div class="meter-foot">
+        <span id="r-overage">&nbsp;</span>
+        <span class="badge" id="b-overage" hidden>Binding limit</span>
+      </div>
+    </article>
+  </section>
+
+  <footer>
+    <span id="updated">&nbsp;</span>
+    <button type="button" id="refresh">Refresh now</button>
+  </footer>
+
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const WINDOWS = ["session", "week", "overage"];
+
+  // Thresholds for meter severity. Below 60% is routine, 60-85% worth noticing,
+  // 85%+ is the "you are about to be cut off" band.
+  const WARN_AT = 0.60, CRIT_AT = 0.85;
+
+  let latest = null;
+  // The phone's clock may be off from the host's. Every payload carries the
+  // server's own time, so we offset against it instead of trusting Date.now().
+  let clockOffset = 0;
+
+  const severityOf = (u) => u >= CRIT_AT ? "critical" : u >= WARN_AT ? "warning" : "normal";
+
+  const pct = (u) => {
+    if (u === null || u === undefined) return "--";
+    const p = u * 100;
+    // Don't round a real-but-tiny number down to a flat "0%".
+    if (p > 0 && p < 1) return "<1%";
+    return Math.round(p) + "%";
+  };
+
+  function countdown(resetEpoch) {
+    if (!resetEpoch) return "";
+    const secs = Math.floor(resetEpoch - (Date.now() / 1000 + clockOffset));
+    if (secs <= 0) return "resetting now";
+    const d = Math.floor(secs / 86400);
+    const h = Math.floor((secs % 86400) / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (d > 0) return `resets in ${d}d ${h}h`;
+    if (h > 0) return `resets in ${h}h ${m}m`;
+    if (m > 0) return `resets in ${m}m ${s}s`;
+    return `resets in ${s}s`;
+  }
+
+  const STATUS = {
+    allowed:         { state: "good",     icon: "✓", text: "Allowed" },
+    allowed_warning: { state: "warning",  icon: "!",      text: "Approaching limit" },
+    rejected:        { state: "critical", icon: "✕", text: "Rate limited" },
+  };
+
+  function renderStatus(snap) {
+    const info = STATUS[snap.status] || { state: "unknown", icon: "?", text: "Unknown" };
+    $("pill").dataset.state = info.state;
+    $("pill-icon").textContent = info.icon;
+    $("pill-text").textContent = info.text;
+  }
+
+  function renderMeter(name, win, binding) {
+    const card = $("m-" + name);
+    const util = win ? win.utilization : null;
+
+    // The overage window only exists on some plans, and reads 0 until you're
+    // actually in overage - hide it rather than show a permanent empty bar.
+    if (name === "overage" && (!win || !util)) { card.hidden = true; return; }
+    card.hidden = false;
+
+    const u = util ?? 0;
+    card.dataset.severity = severityOf(u);
+    $("v-" + name).textContent = pct(util);
+    // A nonzero value always shows a sliver, so "barely used" != "unused".
+    $("f-" + name).style.width = u > 0 ? `max(3px, ${(u * 100).toFixed(1)}%)` : "0%";
+    $("t-" + name).setAttribute("aria-valuenow", Math.round(u * 100));
+    $("t-" + name).setAttribute("aria-valuetext", pct(util) + " used");
+    $("r-" + name).textContent = win ? countdown(win.reset) : "";
+    $("b-" + name).hidden = !binding;
+  }
+
+  // Which window the API says is currently the constraining one.
+  const CLAIM_TO_WINDOW = { five_hour: "session", seven_day: "week", overage: "overage" };
+
+  function render() {
+    const snap = latest;
+    if (!snap) return;
+
+    if (!snap.ok) {
+      $("notice").hidden = false;
+      $("notice-title").textContent = "Can't read usage right now";
+      $("notice-body").textContent = snap.error || "Unknown error.";
+      $("pill").dataset.state = "critical";
+      $("pill-icon").textContent = "✕";
+      $("pill-text").textContent = "Offline";
+      return;
+    }
+    $("notice").hidden = true;
+    renderStatus(snap);
+
+    const binding = CLAIM_TO_WINDOW[snap.representative_claim] || null;
+    const w = snap.windows || {};
+    WINDOWS.forEach((name) => renderMeter(name, w[name], binding === name));
+
+    // Hero = the window that's actually constraining you, falling back to session.
+    const heroName = (binding && w[binding]) ? binding : "session";
+    const hero = w[heroName];
+    const heroTitle = { session: "Session used", week: "Weekly used", overage: "Overage used" };
+    $("hero-label").textContent = heroTitle[heroName] || "Session used";
+    $("hero-value").textContent = hero ? pct(hero.utilization) : "--";
+    $("hero-sub").textContent = hero ? countdown(hero.reset) : "";
+
+    if (snap.fetched_at) {
+      const age = Math.max(0, Math.round(Date.now() / 1000 + clockOffset - snap.fetched_at));
+      $("updated").textContent = age < 90
+        ? `Updated ${age}s ago`
+        : `Updated ${Math.round(age / 60)}m ago`;
+    }
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch("/api/usage", { cache: "no-store" });
+      const snap = await res.json();
+      if (snap.server_time) clockOffset = snap.server_time - Date.now() / 1000;
+      latest = snap;
+      render();
+    } catch (err) {
+      $("notice").hidden = false;
+      $("notice-title").textContent = "Lost the connection";
+      $("notice-body").textContent = "The usage meter on your computer stopped responding.";
+    }
+  }
+
+  $("refresh").addEventListener("click", async () => {
+    const btn = $("refresh");
+    btn.disabled = true;
+    btn.textContent = "Refreshing…";
+    try { await fetch("/api/refresh", { cache: "no-store" }); } catch (_) {}
+    setTimeout(async () => {
+      await poll();
+      btn.disabled = false;
+      btn.textContent = "Refresh now";
+    }, 1800);
+  });
+
+  // Re-sync as soon as the phone wakes or the tab is foregrounded again.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) poll();
+  });
+
+  poll();
+  setInterval(poll, 5000);   // cheap: reads the host's cached snapshot
+  setInterval(render, 1000); // keeps the countdowns ticking between polls
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment
+venv/
+.venv/
+
+# PyInstaller build output
+build/
+dist/
+*.spec
+
+# Never commit credentials
+.credentials.json
+*.credentials.json
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
