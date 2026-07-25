@@ -27,6 +27,16 @@ if (-not (Test-Path $python)) {
     Invoke-Step "Creating virtual environment..." { python -m venv venv }
 }
 
+# A running instance holds a lock on the .exe and PyInstaller fails with
+# "Access is denied" when it tries to overwrite it. Note the onefile bootloader
+# spawns a child, so an earlier run can outlive the console you started it from.
+$running = Get-Process -Name "claude-meter" -ErrorAction SilentlyContinue
+if ($running) {
+    Write-Host "Stopping $($running.Count) running claude-meter instance(s)..." -ForegroundColor Yellow
+    $running | Stop-Process -Force
+    Start-Sleep -Seconds 2
+}
+
 Invoke-Step "Installing build dependencies..." {
     & $python -m pip install --quiet --upgrade -r requirements.txt
 }

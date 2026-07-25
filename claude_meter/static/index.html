@@ -4,34 +4,45 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f0eee6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Claude Code usage</title>
 <style>
   :root {
     color-scheme: light;
-    --plane:          #f9f9f7;
-    --surface-1:      #fcfcfb;
-    --text-primary:   #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted:     #898781;
-    --border:         rgba(11, 11, 11, 0.10);
-    --accent:         #2a78d6;  /* sequential blue, step 450 */
+    --plane:          #f0eee6;   /* Claude's warm page ground */
+    --surface-1:      #faf9f5;   /* card surface */
+    --text-primary:   #1f1e1d;
+    --text-secondary: #5c5a54;
+    --text-muted:     #8c8a82;
+    --border:         rgba(31, 30, 29, 0.12);
+    /* Claude "book cloth" orange. Chosen over #d97757 because that step lands at
+       2.96:1 on this surface -- just under the 3:1 bar -- while this one clears it. */
+    --accent:         #cc785c;
+    /* Status colours stay fixed rather than being themed to the brand, so a
+       status hue never impersonates the accent. Each ships with an icon + word. */
     --good:           #0ca30c;
     --warning:        #fab219;
     --critical:       #d03b3b;
+
+    --font-sans:  "Styrene A", "Styrene B", ui-sans-serif, system-ui, -apple-system,
+                  "Segoe UI", sans-serif;
+    /* Claude's own faces (Styrene/Tiempos) are licensed and can't be embedded --
+       named here so they're used where installed, with close fallbacks elsewhere. */
+    --font-serif: "Tiempos Text", "Tiempos Headline", ui-serif, Georgia, Cambria,
+                  "Times New Roman", serif;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       color-scheme: dark;
-      --plane:          #0d0d0d;
-      --surface-1:      #1a1a19;
-      --text-primary:   #ffffff;
-      --text-secondary: #c3c2b7;
-      --text-muted:     #898781;
-      --border:         rgba(255, 255, 255, 0.10);
-      --accent:         #3987e5;  /* blue re-stepped for the dark surface */
+      --plane:          #141413;
+      --surface-1:      #262624;
+      --text-primary:   #f5f4ef;
+      --text-secondary: #c5c2b6;
+      --text-muted:     #8c8a82;
+      --border:         rgba(245, 244, 239, 0.14);
+      --accent:         #d97757;  /* same hue, re-stepped for the dark surface */
     }
   }
 
@@ -42,7 +53,7 @@
     padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
     background: var(--plane);
     color: var(--text-primary);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-family: var(--font-sans);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
@@ -53,9 +64,16 @@
     display: flex; align-items: center; justify-content: space-between;
     gap: 12px; margin-bottom: 20px;
   }
+  .brand { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .spark { flex: none; color: var(--accent); }
   h1 {
-    margin: 0; font-size: 1rem; font-weight: 600;
-    letter-spacing: -0.01em; color: var(--text-secondary);
+    /* Serif for the wordmark only. Every numeral stays in the sans below --
+       Georgia (the likely Tiempos fallback) has old-style figures that would
+       make a large percentage bounce off the baseline. */
+    margin: 0; font-family: var(--font-serif);
+    font-size: 1.0625rem; font-weight: 500;
+    letter-spacing: -0.01em; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   /* Status carries an icon AND a word, so it never depends on colour alone. */
   .pill {
@@ -78,10 +96,17 @@
   /* ---- hero figure -------------------------------------------------- */
   .hero {
     background: var(--surface-1); border: 1px solid var(--border);
-    border-radius: 14px; padding: 22px 20px 20px; margin-bottom: 14px;
+    border-radius: 16px; padding: 22px 20px 20px; margin-bottom: 14px;
+    position: relative; overflow: hidden;
+  }
+  /* A whisper of the accent, so the card reads warm without tinting the data. */
+  .hero::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
+    background: var(--accent); opacity: .9;
   }
   .hero-label {
-    font-size: 0.8125rem; color: var(--text-secondary);
+    font-family: var(--font-serif);
+    font-size: 0.9375rem; color: var(--text-secondary);
     margin-bottom: 2px;
   }
   .hero-value {
@@ -99,7 +124,7 @@
   .meters { display: grid; gap: 10px; }
   .meter {
     background: var(--surface-1); border: 1px solid var(--border);
-    border-radius: 14px; padding: 14px 16px 15px;
+    border-radius: 16px; padding: 14px 16px 15px;
     /* The fill carries severity; the track is a lighter step of that same
        ramp, mixed toward the surface, so state reads across the whole bar. */
     --fill: var(--accent);
@@ -117,7 +142,11 @@
     font-size: 1.0625rem; font-weight: 600; color: var(--text-primary);
   }
   .meter-track {
-    height: 10px; background: var(--track);
+    height: 10px;
+    /* Flat fallback first: older mobile browsers without color-mix() would
+       otherwise render the track transparent and lose the 100% reference. */
+    background: var(--border);
+    background: var(--track);
     border-radius: 0 4px 4px 0;   /* rounded data-end, square at the baseline */
     overflow: hidden;
   }
@@ -168,7 +197,13 @@
 <div class="wrap">
 
   <header>
-    <h1>Claude Code usage</h1>
+    <div class="brand">
+      <svg class="spark" width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"
+           fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+        <path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/>
+      </svg>
+      <h1>Claude Code usage</h1>
+    </div>
     <span class="pill" id="pill" data-state="unknown">
       <span class="pill-dot" id="pill-icon">-</span>
       <span id="pill-text">Connecting</span>
