@@ -24,6 +24,18 @@ function Invoke-Step {
 
 $python = ".\venv\Scripts\python.exe"
 if (-not (Test-Path $python)) {
+    # Fail with an instruction rather than a stack trace. Missing Python is the
+    # single most likely reason a first-time build stops here.
+    if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+        Write-Host ""
+        Write-Host "Python is not installed, or it is not on your PATH." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "  1. Download it from https://www.python.org/downloads/"
+        Write-Host "  2. Run the installer and TICK 'Add python.exe to PATH' on the first screen"
+        Write-Host "  3. Close this window, open it again, and run this script once more"
+        Write-Host ""
+        exit 1
+    }
     Invoke-Step "Creating virtual environment..." { python -m venv venv }
 }
 

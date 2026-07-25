@@ -25,6 +25,67 @@ a small local web server, so anything with a browser works.
   ...
 ```
 
+## Install it, step by step
+
+Never used Python or a terminal before? Follow these five steps in order. It
+takes about five minutes, and you only do it once.
+
+### Step 1 — Install Python
+
+1. Go to **<https://www.python.org/downloads/>**
+2. Click the big yellow **Download Python** button
+3. Open the file you just downloaded
+4. ⚠️ **On the first screen, tick the box at the bottom that says
+   "Add python.exe to PATH".** This is the step everyone forgets, and nothing
+   works without it
+5. Click **Install Now** and wait for it to finish
+
+### Step 2 — Download this project
+
+1. Scroll to the top of this page
+2. Click the green **Code** button, then **Download ZIP**
+3. Open your **Downloads** folder and find the ZIP file
+4. Right-click it → **Extract All…** → **Extract**
+
+### Step 3 — Build the app
+
+1. Open the folder that was just extracted
+2. Double-click **`build.bat`**
+3. A black window opens and text scrolls past — this takes a minute or two
+4. Wait until you see **`Built ... claude-meter.exe`**, then press any key to close
+
+> Use `build.bat`, **not** `build_exe.ps1`. Windows blocks PowerShell scripts
+> that were downloaded from the internet; the `.bat` file works around that.
+
+### Step 4 — Run it
+
+1. Open the new **`dist`** folder
+2. Double-click **`claude-meter.exe`**
+3. If Windows says *"Windows protected your PC"*, click **More info** →
+   **Run anyway**. That warning appears because the app isn't signed, not
+   because anything is wrong with it
+4. A window opens showing a web address and a QR code — leave it open
+
+### Step 5 — Open it on your phone
+
+1. Point your phone's camera at the QR code
+2. Tap the link that pops up
+3. Your phone must be on the **same Wi-Fi** as your computer
+
+That's it. To use it again later, just double-click `claude-meter.exe` — steps
+1 to 3 are only needed once.
+
+### If something goes wrong
+
+| What you see | What it means | What to do |
+|---|---|---|
+| `Python is not installed` | Step 1 didn't finish, or the PATH box wasn't ticked | Reinstall Python, tick **Add python.exe to PATH**, then close and reopen the black window |
+| `running scripts is disabled on this system` | You ran `build_exe.ps1` instead of `build.bat` | Double-click **`build.bat`** |
+| *Windows protected your PC* | The app isn't signed | **More info** → **Run anyway** |
+| `No Claude Code OAuth credentials found` | You've never signed into Claude Code on this computer | Open Claude Code, sign in once, then restart the app |
+| The phone page won't open | The phone is on a different network | Put both devices on the same Wi-Fi |
+| `Could not bind ... address already in use` | Another program is using that port | Run `claude-meter.exe --port 9000` |
+
 ## How it works
 
 There is no usage endpoint in the Claude API. The numbers live in the **response
@@ -70,6 +131,9 @@ cd Claude_Token_Counter
 
 Python is needed only to *build*. The resulting executable is self-contained, so
 the machine that runs it needs nothing installed.
+
+If PowerShell refuses to run the script, double-click `build.bat` instead — it
+invokes the same script with the execution policy bypassed.
 
 ### Or run from source directly
 
