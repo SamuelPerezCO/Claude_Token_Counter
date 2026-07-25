@@ -176,6 +176,10 @@
     border: 1px solid var(--critical);
     font-size: 0.8125rem; color: var(--text-secondary);
   }
+  /* Amber, not red: stale data is a degraded state, not a dead one. */
+  .notice[data-level="warning"] { border-color: var(--warning); }
+  /* Startup is neither -- keep it quiet. */
+  .notice[data-level="info"] { border-color: var(--border); }
   .notice strong { color: var(--text-primary); display: block; margin-bottom: 2px; }
   footer {
     margin-top: 18px; display: flex; justify-content: space-between;
@@ -321,6 +325,13 @@
     rejected:        { state: "critical", icon: "✕", text: "Rate limited" },
   };
 
+  function showNotice(level, title, body) {
+    $("notice").hidden = false;
+    $("notice").dataset.level = level;
+    $("notice-title").textContent = title;
+    $("notice-body").textContent = body;
+  }
+
   function renderStatus(snap) {
     const info = STATUS[snap.status] || { state: "unknown", icon: "?", text: "Unknown" };
     $("pill").dataset.state = info.state;
@@ -356,15 +367,26 @@
     if (!snap) return;
 
     if (!snap.ok) {
-      $("notice").hidden = false;
-      $("notice-title").textContent = "Can't read usage right now";
-      $("notice-body").textContent = snap.error || "Unknown error.";
-      $("pill").dataset.state = "critical";
-      $("pill-icon").textContent = "✕";
-      $("pill-text").textContent = "Offline";
+      // fetched_at is null only before the very first fetch completes. That's
+      // startup, not failure -- a red error card there would be a lie.
+      const starting = snap.fetched_at === null;
+      showNotice(starting ? "info" : "critical",
+                 starting ? "Fetching your usage…" : "Can't read usage right now",
+                 starting ? "This takes a moment on first launch." : (snap.error || "Unknown error."));
+      $("pill").dataset.state = starting ? "unknown" : "critical";
+      $("pill-icon").textContent = starting ? "…" : "✕";
+      $("pill-text").textContent = starting ? "Connecting" : "Offline";
       return;
     }
-    $("notice").hidden = true;
+
+    if (snap.stale) {
+      // The figures below are real, just not fresh. Far better to show usage
+      // from a minute ago than to wipe the dashboard over a transient blip.
+      showNotice("warning", "Showing last known usage",
+                 (snap.error || "The last refresh failed.") + " Retrying automatically.");
+    } else {
+      $("notice").hidden = true;
+    }
     renderStatus(snap);
 
     const binding = CLAIM_TO_WINDOW[snap.representative_claim] || null;
@@ -395,9 +417,8 @@
       latest = snap;
       render();
     } catch (err) {
-      $("notice").hidden = false;
-      $("notice-title").textContent = "Lost the connection";
-      $("notice-body").textContent = "The usage meter on your computer stopped responding.";
+      showNotice("critical", "Lost the connection",
+                 "The usage meter on your computer stopped responding.");
     }
   }
 

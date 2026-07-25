@@ -18,11 +18,12 @@ Header values were confirmed against the live API rather than assumed.
 from __future__ import annotations
 
 import json
+import random
 import threading
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from . import credentials
@@ -50,6 +51,20 @@ WINDOWS = {
     "week": "7d",
     "overage": "overage",
 }
+
+# Transient server-side conditions. urllib has no reason phrase for the
+# non-standard 529, so it would otherwise surface as a bare "<none>".
+RETRYABLE_STATUS = {408, 500, 502, 503, 504, 529}
+
+HTTP_EXPLANATIONS = {
+    408: "The request timed out on Anthropic's side.",
+    500: "Anthropic hit an internal error.",
+    502: "Bad gateway while reaching Anthropic.",
+    503: "Anthropic's API is unavailable.",
+    529: "Anthropic's API is temporarily overloaded.",
+}
+
+MAX_ATTEMPTS = 3
 
 
 def _as_fraction(raw: str | None) -> float | None:
@@ -110,6 +125,9 @@ class Snapshot:
     windows: dict = field(default_factory=dict)
     error: str | None = None
     account: str | None = None
+    # True when the numbers are real but the most recent refresh failed, so the
+    # dashboard can keep showing them instead of blanking out over a blip.
+    stale: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -121,64 +139,90 @@ class Snapshot:
             "windows": self.windows,
             "error": self.error,
             "account": self.account,
+            "stale": self.stale,
         }
 
 
+def _describe_http_error(code: int, reason: Any) -> str:
+    """Readable text for an HTTP failure.
+
+    urllib has no reason phrase for non-standard codes like 529, so the raw
+    value renders as an unhelpful "<none>".
+    """
+    if explanation := HTTP_EXPLANATIONS.get(code):
+        return f"{explanation} (HTTP {code})"
+    return f"API returned HTTP {code}" + (f": {reason}" if reason else "")
+
+
 def fetch_once(timeout: float = 30.0) -> Snapshot:
-    """Make one probe request and return a snapshot of the rate-limit state."""
+    """Probe the API and snapshot the rate-limit state, retrying transient errors."""
     try:
         creds = credentials.load()
     except credentials.CredentialsError as exc:
         return Snapshot(ok=False, error=str(exc), fetched_at=time.time())
 
-    request = urllib.request.Request(
-        API_URL,
-        data=json.dumps(PROBE_BODY).encode("utf-8"),
-        headers={**BASE_HEADERS, "Authorization": f"Bearer {creds.access_token}"},
-        method="POST",
-    )
+    last_error = "Unknown error"
 
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            headers = response.headers
-            response.read()  # drain so the connection can be reused/closed cleanly
-    except urllib.error.HTTPError as exc:
-        # A 429 still carries the rate-limit headers, and they're exactly what we
-        # want to show -- so parse them rather than treating this as a failure.
-        headers = exc.headers
-        if exc.code == 401:
-            return Snapshot(
-                ok=False,
-                fetched_at=time.time(),
-                error="Token rejected (401). Run `claude` once to refresh your login.",
-            )
-        if not headers or not headers.get("anthropic-ratelimit-unified-status"):
-            return Snapshot(
-                ok=False,
-                fetched_at=time.time(),
-                error=f"API returned HTTP {exc.code}: {exc.reason}",
-            )
-    except urllib.error.URLError as exc:
-        return Snapshot(ok=False, fetched_at=time.time(), error=f"Network error: {exc.reason}")
-    except TimeoutError:
-        return Snapshot(ok=False, fetched_at=time.time(), error="Request timed out")
+    for attempt in range(MAX_ATTEMPTS):
+        if attempt:
+            # Exponential backoff with jitter. Retrying an overloaded API in
+            # lockstep is how a brief blip turns into a stampede.
+            time.sleep(min(2**attempt, 8) + random.uniform(0, 0.5))
 
-    parsed = parse_headers(headers)
-    if not parsed["windows"]:
-        return Snapshot(
-            ok=False,
-            fetched_at=time.time(),
-            error="Response carried no unified rate-limit headers.",
+        request = urllib.request.Request(
+            API_URL,
+            data=json.dumps(PROBE_BODY).encode("utf-8"),
+            headers={**BASE_HEADERS, "Authorization": f"Bearer {creds.access_token}"},
+            method="POST",
         )
 
-    return Snapshot(
-        ok=True,
-        fetched_at=time.time(),
-        status=parsed["status"],
-        representative_claim=parsed["representative_claim"],
-        windows=parsed["windows"],
-        account=creds.subscription_type,
-    )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                headers = response.headers
+                response.read()  # drain so the connection closes cleanly
+        except urllib.error.HTTPError as exc:
+            headers = exc.headers
+            if headers and headers.get("anthropic-ratelimit-unified-status"):
+                # A 429 still carries the rate-limit headers, and being throttled
+                # is precisely what we want to display -- fall through and parse.
+                pass
+            elif exc.code == 401:
+                return Snapshot(
+                    ok=False,
+                    fetched_at=time.time(),
+                    error="Token rejected (401). Run `claude` once to refresh your login.",
+                )
+            else:
+                last_error = _describe_http_error(exc.code, exc.reason)
+                if exc.code in RETRYABLE_STATUS:
+                    continue
+                return Snapshot(ok=False, fetched_at=time.time(), error=last_error)
+        except urllib.error.URLError as exc:
+            # HTTPError subclasses URLError, so this only catches transport faults.
+            last_error = f"Network error: {exc.reason}"
+            continue
+        except TimeoutError:
+            last_error = "Request timed out"
+            continue
+
+        parsed = parse_headers(headers)
+        if not parsed["windows"]:
+            return Snapshot(
+                ok=False,
+                fetched_at=time.time(),
+                error="Response carried no unified rate-limit headers.",
+            )
+
+        return Snapshot(
+            ok=True,
+            fetched_at=time.time(),
+            status=parsed["status"],
+            representative_claim=parsed["representative_claim"],
+            windows=parsed["windows"],
+            account=creds.subscription_type,
+        )
+
+    return Snapshot(ok=False, fetched_at=time.time(), error=last_error)
 
 
 class Poller:
@@ -204,12 +248,26 @@ class Poller:
     def _run(self) -> None:
         while not self._stop.is_set():
             try:
-                snapshot = fetch_once()
+                result = fetch_once()
             except Exception as exc:  # a poller thread must never die
-                snapshot = Snapshot(ok=False, fetched_at=time.time(), error=repr(exc))
+                result = Snapshot(ok=False, fetched_at=time.time(), error=repr(exc))
+
             with self._lock:
-                self._snapshot = snapshot
-            self._wake.wait(self.interval)
+                previous = self._snapshot
+                if result.ok:
+                    self._snapshot = result
+                elif previous.ok:
+                    # Keep the last real numbers on screen and flag the problem,
+                    # rather than blanking the dashboard over a transient outage.
+                    # fetched_at stays put, so the age shown keeps climbing.
+                    self._snapshot = replace(previous, stale=True, error=result.error)
+                else:
+                    self._snapshot = result
+                degraded = not self._snapshot.ok or self._snapshot.stale
+
+            # Check back sooner while degraded so recovery shows up promptly, but
+            # not so fast that we pile onto an API that is already struggling.
+            self._wake.wait(min(self.interval, 20.0) if degraded else self.interval)
             self._wake.clear()
 
     def start(self) -> None:
