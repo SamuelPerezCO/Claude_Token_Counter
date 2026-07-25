@@ -52,7 +52,24 @@ probe request itself counts toward the limits it reports.
 
 ## Running it
 
-### From source
+The built `.exe` is **not** in this repository — binaries don't belong in git, so
+`dist/` is ignored. That means `build_exe.ps1` on its own does nothing: it is a
+build script, and it compiles the source sitting next to it. You need the whole
+repo either way.
+
+### Build the .exe (needs Python once)
+
+```powershell
+git clone https://github.com/SamuelPerezCO/Claude_Token_Counter.git
+cd Claude_Token_Counter
+.\build_exe.ps1          # produces dist\claude-meter.exe
+.\dist\claude-meter.exe
+```
+
+Python is needed only to *build*. The resulting executable is self-contained, so
+the machine that runs it needs nothing installed.
+
+### Or run from source directly
 
 ```powershell
 python -m venv venv
@@ -60,14 +77,18 @@ python -m venv venv
 .\venv\Scripts\python.exe -m claude_meter
 ```
 
-### As an .exe
+### Sharing it with someone else
 
-```powershell
-.\build_exe.ps1          # produces dist\claude-meter.exe
-.\dist\claude-meter.exe
-```
+Send them the built `dist\claude-meter.exe` and nothing else — it has no
+dependencies. Two things worth telling them:
 
-The executable is self-contained — no Python needed on the machine that runs it.
+- **Windows SmartScreen will warn on first run.** The executable is unsigned, so
+  Windows shows *"Windows protected your PC"* until they click **More info →
+  Run anyway**. Removing that warning requires a paid code-signing certificate.
+- **It reads their own credentials, not yours.** No token is baked into the
+  binary. Whoever runs it sees *their* usage, from *their*
+  `~/.claude/.credentials.json`, and they need to have logged into Claude Code
+  at least once for it to work.
 
 ### Options
 
@@ -107,6 +128,27 @@ HTTP response. Still, on an untrusted network (café, coworking, hotel), run wit
 | `/api/usage` | Current snapshot as JSON |
 | `/api/refresh` | Ask the poller to fetch immediately |
 | `/healthz` | Liveness check |
+
+## The dashboard
+
+Styled in Claude's palette — warm cream surfaces, orange accent, Styrene/Tiempos
+typography. Three design notes, since each was a deliberate call:
+
+- **The accent is `#cc785c`, not `#d97757`.** The more familiar Claude orange
+  measures 2.96:1 against the cream surface, just under the 3:1 legibility bar;
+  the "book cloth" step clears it. Dark mode uses `#d97757`, which passes against
+  the darker surface.
+- **All numerals are sans, even though headings are serif.** Styrene and Tiempos
+  are commercially licensed and can't be embedded, so they're named first in the
+  font stack with fallbacks. Georgia — the likely Tiempos fallback — has
+  old-style figures where 3, 4, 5, 7 and 9 drop below the baseline, which would
+  make a large percentage visibly wobble.
+- **Status never relies on colour alone.** The "Allowed" green and "Rate limited"
+  red are near-identical under deuteranopia (ΔE 4.1), so the status pill always
+  carries an icon *and* a word.
+
+Usage is shown as meters rather than gauges or pie charts: the data is a single
+ratio against a limit, which is what a meter is for.
 
 ## Layout
 
